@@ -1,0 +1,27 @@
+#!/bin/sh
+
+#import functions
+. /etc/rc.d/functions
+
+#echo 1 > /proc/sys/net/ipv4/ip_forward	# enable IP forwarding
+#echo 1 > /proc/sys/net/ipv4/tcp_syncookies	# defend against SYN flood
+
+msg_green "Setting up loopback networking..."
+ifconfig lo 127.0.0.1 netmask 255.0.0.0 
+
+msg_green "Setting up eth0 "
+ifconfig eth0 192.168.1.20 netmask 255.255.255.0
+
+#msg_green "Setting up eth1 "
+#ifconfig eth1 192.168.0.20 netmask 255.255.255.0
+
+
+
+msg_green "Setting default route"
+#ip route add default via 192.168.0.1 scope link metric 1 dev eth0
+route add default gw 192.168.1.1
+
+
+if [ -x /etc/rc.d/rc.local ]; then
+	/etc/rc.d/rc.local
+fi

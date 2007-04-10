@@ -1,0 +1,8 @@
+#!/bin/sh
+
+#import functions
+. /etc/rc.d/functions
+
+if [ -x /etc/rc.d/rc.local ]; then
+	/etc/rc.d/rc.local
+fi

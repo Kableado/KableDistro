@@ -1,0 +1,65 @@
+Submitted By:            Randy McMurchy <randy_at_linuxfromscratch_dot_org>
+Date:                    2006-05-24
+Initial Package Version: 1.0pre7try2
+Upstream Status:         In upstream CVS
+Origin:                  Upstream CVS
+Description:             Fixes a build issue because the round function is not defined
+
+$Id: MPlayer-1.0pre7try2-round_function_fix-1.patch 1541 2006-05-24 16:11:58Z randy $
+
+
+--- MPlayer-1.0pre7try2-orig/configure	2006-05-24 10:51:27.000000000 -0500
++++ MPlayer-1.0pre7try2/configure	2006-05-24 09:56:33.000000000 -0500
+@@ -2393,6 +2393,19 @@
+ fi
+ echores "$_lrintf"
+ 
++echocheck "round"
++cat > $TMPC << EOF
++#include <math.h>
++int main(void) { (void) round(0.0); return 0; }
++EOF
++_round=no
++cc_check $_ld_lm && _round=yes
++if test "$_round" = yes ; then
++  _def_round="#define HAVE_ROUND 1"
++else
++  _def_round="#undef HAVE_ROUND"
++fi
++echores "$_round"
+ 
+ echocheck "nanosleep"
+ # also check for nanosleep
+@@ -7310,6 +7323,9 @@
+ /* C99 lrintf function available */
+ $_def_lrintf
+ 
++/* round function is available */
++$_def_round
++
+ /* yes, we have inttypes.h */
+ #define HAVE_INTTYPES_H 1
+ 
+--- MPlayer-1.0pre7try2-orig/libvo/gtf.c	2002-08-22 18:03:50.000000000 -0500
++++ MPlayer-1.0pre7try2/libvo/gtf.c	2006-05-24 09:46:42.000000000 -0500
+@@ -9,6 +9,7 @@
+  */
+        
+ //Version 0.4
++#include "config.h"
+ #include <stdio.h> 
+ #include <stdlib.h> 
+ #include <math.h> 
+@@ -24,10 +25,12 @@
+ 
+ static GTF_constants GTF_given_constants = { 3.0,550.0,1,8,1.8,8,40,20,128,600 };
+ 
++#ifndef HAVE_ROUND
+ static double round(double v) 
+ { 
+         return floor(v + 0.5); 
+ } 
++#endif
+ 	
+ static void GetRoundedConstants(GTF_constants *c)
+     {

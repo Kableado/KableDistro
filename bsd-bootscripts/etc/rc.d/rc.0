@@ -1,0 +1,70 @@
+#!/bin/sh
+
+
+#########################################
+######## HALT or REBOOT #################
+#########################################
+
+#import functions
+. /etc/rc.d/functions
+
+msg_green "Sending all processes the TERM signal..."
+/sbin/killall5 -15
+sleep 1
+
+msg_green "Sending all processes the KILL signal..."
+/sbin/killall5 -9
+sleep 1
+
+msg_green "Deactivating swap partitions..."
+/sbin/swapoff -a
+
+msg_green "Saving random seed to a temporary file..."
+/bin/dd if=/dev/urandom of=/etc/random-seed count=1 bs=512 2>/dev/null
+
+
+msg_green "Saving mixer settings..."
+/usr/sbin/alsactl store
+
+
+msg_green "Saving the system time to hardware clock..."
+# For UTC
+#/sbin/hwclock --systohc --utc
+# For localtime
+/sbin/hwclock --systohc --localtime
+
+
+
+
+
+case "$0" in
+	*6)
+		/sbin/reboot -w
+	;;
+	
+	*0)
+		/sbin/halt -w
+	;;
+esac
+
+msg_green "Flushing filesystem buffers..."
+/bin/sync
+
+msg_green "Remounting root filesystem read-only..."
+/bin/mount -n -o remount,ro /
+
+msg_green "Unmounting local filesystems..."
+/bin/umount -a -tnonfs
+
+case "$0" in
+	*6)
+		msg_green "Please stand by while rebooting..."
+		/sbin/reboot -d -f -i
+	;;
+	
+	*0)
+		msg_green "Bye..."
+		/sbin/halt -d -f -p
+	;;
+esac
+

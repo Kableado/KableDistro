@@ -1,0 +1,23 @@
+#!/bin/sh
+
+
+
+#########################################
+######## SINGLE USER ####################
+#########################################
+
+#import functions
+. /etc/rc.d/functions
+
+
+msg_green "Sending all processes the TERM signal..."
+/sbin/killall5 -15
+sleep 1
+
+
+
+msg_green "Sending all processes the KILL signal..."
+/sbin/killall5 -9
+
+
+# inittab takes care of the rest

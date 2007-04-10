@@ -1,0 +1,6 @@
+#!/bin/sh
+
+#import functions
+. /etc/rc.d/functions
+
+

@@ -1,0 +1,35 @@
+# Begin /etc/profile
+
+# Set PATH
+if [ "`id -u`" -eq 0 ]; then
+  PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+else
+  PATH="/usr/bin:/bin:/usr/local/bin:~/bin:."
+fi
+export PATH
+
+
+# Set prompt
+if [ "$PS1" ]; then
+  if [ "$BASH" ]; then
+    PS1='\u@\h:\w\$ '
+  else
+    if [ "`id -u`" -eq 0 ]; then
+      PS1='# '
+    else
+      PS1='$ '
+    fi
+  fi
+fi
+
+
+umask 022
+
+export LANG=es_ES@euro
+export INPUTRC=/etc/inputrc
+
+# Aliases
+alias ls='ls --color'
+alias cd..='cd ..'
+
+# End /etc/profile

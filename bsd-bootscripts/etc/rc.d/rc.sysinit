@@ -1,0 +1,132 @@
+#!/bin/sh
+
+####################################
+####### SYSINIT ####################
+####################################
+
+
+#import functions
+. /etc/rc.d/functions
+
+
+msg_green "Remounting root device read-write..."
+/bin/mount -n -v -o remount,rw /
+
+msg_green "Mounting kernel-based file systems..."
+mount -n -t proc proc /proc
+mount -n -t sysfs sysfs /sys
+mount -n -t tmpfs tmpfs /dev -o mode=755
+mkdir /dev/pts
+mkdir /dev/shm
+mount -n -t devpts devpts /dev/pts -o gid=4,mode=620
+mount -n -t tmpfs tmpfs /dev/shm 
+
+msg_green "Starting UDEV..."
+
+# Avoid other binarys reciving kernel events
+echo > /proc/sys/kernel/hotplug
+
+# Copy static device nodes to /dev
+cp -a /lib/udev/devices/* /dev
+
+/sbin/udevd --daemon
+/sbin/udevtrigger
+/sbin/udevsettle
+
+msg_green "Setting HD params"
+hdparm -d1 -c1 -u1 -m16 /dev/hda
+
+msg_green "Starting system and kernel log daemons...."
+/usr/sbin/syslogd
+/usr/sbin/klogd -c3
+
+
+msg_green "Initializing swap partitions..."
+/sbin/swapon -a
+
+# Creaning mtab
+echo "" >/etc/mtab
+/bin/mount -f -o remount,rw /
+
+
+
+msg_green "Mounting other local filesystems..."
+/bin/mount -a -v -tnonfs
+
+
+
+msg_green "Setting up hostname..."
+/bin/hostname `cat /etc/hostname |cut -d . -f1`
+
+
+
+
+
+
+if [ -f "/etc/random-seed" ]; then
+  msg_green "Initializing random number generator..."
+  /bin/cat /etc/random-seed >/dev/urandom
+  rm -f /etc/random-seed
+fi
+
+
+
+msg_green "restoring mixer settings..."
+/usr/sbin/alsactl restore
+
+
+# removing stale PID files is good, too
+msg_green "Removing stale PID files..."
+/bin/rm /var/run/*.pid &> /dev/null
+/bin/rm /etc/dhcpc/*.pid &> /dev/null
+
+
+
+msg_green "Loading keymap..."
+/bin/loadkeys es &> /dev/null
+
+
+msg_green "Setting console font..."
+/usr/bin/setfont lat9u-12.psfu.g
+
+
+msg_green "Setting keyboard rate (30) and delay (250)..."
+/usr/bin/kbdrate -r 30 -d 250
+
+
+msg_green "Setting up Mouse(gpm)..."
+gpm -m /dev/input/mice -t imps2
+
+
+### mplayer likes this...
+msg_green "Configuring RTC..."
+echo 1024 > /proc/sys/dev/rtc/max-user-freq
+
+
+msg_green "Setting system time from hardware clock..."
+# For UTC
+#/sbin/hwclock --hctosys --utc
+# For Localtime
+/sbin/hwclock --hctosys --localtime
+
+
+
+### Use modules? If yes, uncomment this:
+# echo "Updating module dependencies..."
+# /sbin/depmod -a
+
+# Load Modules
+if [ -f "/etc/modules" ]; then
+	msg_green "Loading modules..."
+	for i in $(cat /etc/modules) 
+	do
+		modprobe $i
+	done
+fi
+
+
+### You may find this useful when you have some (non-networking) daemons
+### and an extra .rc-file for them:
+if [ -x /etc/rc.d/rc.daemons ]; then
+	/etc/rc.d/rc.daemons
+fi

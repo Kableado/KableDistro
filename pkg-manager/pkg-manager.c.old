@@ -1,0 +1,456 @@
+// permitir offsets de 64bits (tamaños mayores de 4GB)
+#define _FILE_OFFSET_BITS 64
+
+#include <stdio.h>
+#include <dirent.h>
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <utime.h>
+
+#include "StringUtil.h"
+#include "Ficheros.h"
+
+
+
+
+#define SYSTEM_ROOT "/home/kable/testsystem/"
+#define PKG_BASEDIR SYSTEM_ROOT"var/db/pkg/"
+#define ROOT_LIST_FILE PKG_BASEDIR"lista_ficheros"
+
+
+
+// Estructuras para la lista de ficheros del sistema
+
+typedef struct {
+	char nombre[1024];
+	char propietario[255];
+	void *next;
+} Root_File_Ent;
+
+typedef struct {
+	Root_File_Ent *lista;
+} Root_File_List;
+
+
+Root_File_List *lista_sistema_cargar(){
+	Root_File_List *lista_contenedor;
+	Root_File_Ent *lista=NULL,*pi=NULL,*aux;
+	FILE *fichero;
+	char linea[2048];
+	int origen;
+
+	fichero=fopen(ROOT_LIST_FILE,"r");
+	if(fichero!=NULL){
+		while(fgets(linea,2048,fichero)!=NULL){
+			aux=(Root_File_Ent *)malloc(sizeof(Root_File_Ent));	
+			origen=0;
+			coger_entrecomillado(linea,&origen,aux->nombre);
+			coger_entrecomillado(linea,&origen,aux->propietario);
+
+			aux->next=NULL;
+			if(pi==NULL){
+				lista=aux;
+				pi=lista;
+			}else{
+				pi->next=(void *)aux;
+				pi=aux;
+			}
+		}
+		fclose(fichero);
+	}
+
+	lista_contenedor=(Root_File_List *)malloc(sizeof(Root_File_List));
+	lista_contenedor->lista=lista;
+
+	return(lista_contenedor);
+}
+
+void lista_sistema_borrar(Root_File_List *lista){
+	Root_File_Ent *next,*aux;
+	next=lista->lista;
+	while(next!=NULL){
+		aux=(Root_File_Ent *)next->next;
+		free(next);
+		next=aux;
+	}
+	free(lista);
+}
+
+Root_File_Ent *lista_sistema_sacar_fichero(Root_File_List *lista,char *fichero){
+	Root_File_Ent *aux,*prev=NULL,*pi;
+	int enc=0;
+	pi=lista->lista;
+	
+	while(pi!=NULL && !enc){
+		if(!strcmp(pi->nombre,fichero)){
+			aux=pi;
+			enc=1;
+		}else{
+			prev=pi;
+			pi=(Root_File_Ent *)pi->next;
+		}
+	}
+	
+	if(enc){
+		if(prev!=NULL){
+			prev->next=aux->next;
+		}else{
+			lista->lista=aux->next;
+		}
+		return(aux);
+	}else{
+		return(NULL);
+	}
+
+}
+
+
+void lista_sistema_guardar(Root_File_List *lista){
+	Root_File_Ent *aux;
+	FILE *fichero;
+	aux=lista->lista;
+
+	fichero=fopen(ROOT_LIST_FILE,"w");
+	if(fichero!=NULL){
+		while(aux!=NULL){
+			fprintf(fichero,"\"%s\"\t\"%s\"\n",aux->nombre,aux->propietario);
+			aux=(Root_File_Ent *)aux->next;
+		}
+		fclose(fichero);
+	}
+}
+
+
+
+
+// Estructuras para la lista de ficheros del paquete
+
+typedef struct {
+	char nombre[1024];
+	void *next;
+} Pkg_File_Ent;
+
+typedef struct {
+	Pkg_File_Ent *lista;
+} Pkg_File_List;
+
+
+
+Pkg_File_List *pkg_lista_cargar(char *nombre){
+	Pkg_File_List *lista_contenedor;
+	Pkg_File_Ent *lista=NULL,*pi=NULL,*aux;
+	FILE *fichero;
+	char path_fichero[1024];
+	char linea[1024];
+	int a;
+
+	sprintf(path_fichero,PKG_BASEDIR"%s/lista\0",nombre);
+
+	fichero=fopen(path_fichero,"r");
+	if(fichero!=NULL){
+		while(fgets(linea,1024,fichero)!=NULL){
+			aux=(Pkg_File_Ent *)malloc(sizeof(Root_File_Ent));
+			// quitar el salto de linea final
+			for(a=strlen(linea)-3;a<strlen(linea);a++){
+				if(linea[a]=='\n')
+					linea[a]=0;
+			}
+			// copiar nombre de fichero
+			strcpy(aux->nombre,linea);
+			// avanzar el la lista
+			aux->next=NULL;
+			if(pi==NULL){
+				lista=aux;
+				pi=lista;
+			}else{
+				pi->next=(void *)aux;
+				pi=aux;
+			}
+		}
+		fclose(fichero);
+	}
+
+	lista_contenedor=(Pkg_File_List *)malloc(sizeof(Pkg_File_List));
+	lista_contenedor->lista=lista;
+
+	return(lista_contenedor);	
+}
+
+
+void pkg_lista_borrar(Pkg_File_List *lista){
+	Pkg_File_Ent *next,*aux;
+	next=lista->lista;
+	while(next!=NULL){
+		aux=(Pkg_File_Ent *)next->next;
+		free(next);
+		next=aux;
+	}
+	free(lista);
+}
+
+
+void pkg_lista_print(Pkg_File_List *lista){
+	Pkg_File_Ent *pi;
+
+	pi=lista->lista;
+	while(pi!=NULL){
+		printf("%s\n",pi->nombre);
+		pi=(Pkg_File_Ent *)pi->next;
+	}
+	
+}
+
+
+
+
+
+
+
+void combinar_listas(Root_File_List *lista,Pkg_File_List *lista_pkg,char *nombre){
+	Pkg_File_Ent *pi;
+	Root_File_Ent *aux,*last;
+	int enc=0;
+
+	// buscar el ultimo elemento de la lista
+	last=lista->lista;
+	while(last!=NULL && !enc){
+		if(last->next==NULL){
+			enc=1;
+		}else{
+			last=(Root_File_Ent *)last->next;
+		}
+	}
+
+	pi=lista_pkg->lista;
+	while(pi!=NULL){
+		if(pi->nombre[strlen(pi->nombre)-1]!='/'){ // solo ficheros
+			// anhadir fichero(del paquete) a la lista de ficheros(del sistema)
+			aux=(Root_File_Ent *)malloc(sizeof(Root_File_Ent));
+			strcpy(aux->nombre,pi->nombre);
+			strcpy(aux->propietario,nombre);
+		
+			aux->next=NULL;
+			if(last==NULL){
+				lista->lista=aux;
+				last=aux;
+			}else{
+				last->next=(void *)aux;
+				last=aux;
+			}
+		}
+
+		// siguente fichero de paquete
+		pi=(Pkg_File_Ent *)pi->next;
+	}
+
+}
+
+
+
+
+
+
+
+
+
+void pkg_preparar(char *name){
+	char path[1024];
+
+	// crear los directorios
+	sprintf(path,PKG_BASEDIR"%s\0",name);
+	mkdir(path,0755);
+	sprintf(path,PKG_BASEDIR"%s/ficheros\0",name);
+	mkdir(path,0755);
+}
+
+
+void pkg_extraer(char *fichero,char *nombre){
+	char comando[1024];
+	char destdir[1024];
+	char listfile[1024];
+	// preparar el comando
+	sprintf(destdir,PKG_BASEDIR"%s/ficheros\0",nombre);
+	sprintf(listfile,PKG_BASEDIR"%s/lista\0",nombre);
+	sprintf(comando,"tar xjvfp %s -C %s --index-file %s &> /dev/null\0",fichero,destdir,listfile);
+
+
+	// extarer el paquete utilizando tar+bzip2
+	system(comando);
+
+
+
+	// Recoger scripts de instalacion y desinstalacion
+	char script_path[1024],script_dest_path[1024];
+	sprintf(script_path,PKG_BASEDIR"%s/ficheros/install.sh\0",nombre);
+	sprintf(script_dest_path,PKG_BASEDIR"%s/install.sh\0",nombre);
+	if(ExisteFichero(script_path)){
+		rename(script_path,script_dest_path);
+	}
+
+	sprintf(script_path,PKG_BASEDIR"%s/ficheros/uninstall.sh\0",nombre);
+	sprintf(script_dest_path,PKG_BASEDIR"%s/uninstall.sh\0",nombre);
+	if(ExisteFichero(script_path)){
+		rename(script_path,script_dest_path);
+	}
+
+}
+
+
+void pkg_merge_dir(Root_File_List *lista_sistema,char *pkg_nombre,char *path,char *vpath){
+	DIR *directorio;
+	struct dirent *entidad_dir;
+	char file_path[1024];
+	char file_dest_path[1024];
+	char file_vpath[1024];
+	struct stat stat_info;
+
+	// abrir el directorio
+	directorio=opendir(path);
+	if(directorio!=NULL){
+		do{
+			entidad_dir=readdir(directorio);
+			if(entidad_dir!=NULL){ 
+				if(strcmp(entidad_dir->d_name,".") && 
+				   strcmp(entidad_dir->d_name,"..")){
+					// procesar la entidad (fichero o directorio)
+					strcpy(file_path,path);
+					strcat(file_path,"/");
+					strcat(file_path,entidad_dir->d_name);
+					strcpy(file_dest_path,SYSTEM_ROOT);
+					strcat(file_dest_path,vpath);
+					strcat(file_dest_path,"/");
+					strcat(file_dest_path,entidad_dir->d_name);
+					strcpy(file_vpath,vpath);
+					if(strcmp(vpath,"")){
+						strcat(file_vpath,"/");
+					}
+					strcat(file_vpath,entidad_dir->d_name);
+					lstat(file_path, &stat_info);
+	
+					if(  S_ISDIR(stat_info.st_mode) &&
+					     !(stat_info.st_mode&S_IFLNK)){
+						char new_path[1024];
+						char new_vpath[1024];
+						int existe=0;
+
+						// es un directorio
+						strcpy(new_path,file_path);
+						strcpy(new_vpath,file_vpath);
+
+						// crear el directorio
+						if(!ExisteFichero(file_dest_path)){
+							mkdir(file_dest_path,0755);
+						}else{
+							existe=1;
+						}
+	
+						// recursivar
+						pkg_merge_dir(lista_sistema,pkg_nombre,new_path,new_vpath);
+					
+						// establecer atributos del directorio origen
+						if(!existe){
+							struct utimbuf tiempos;
+							chmod(file_dest_path,stat_info.st_mode);
+							chown(file_dest_path,stat_info.st_uid,stat_info.st_gid);
+							tiempos.actime=stat_info.st_atime;
+							tiempos.modtime=stat_info.st_mtime;
+							utime(file_dest_path,&tiempos);
+						}
+
+						// borrar el directorio movido
+						//remove(new_path);
+					}else{
+						struct utimbuf tiempos;
+
+						// comprobar si el fichero existia previamente
+						if(ExisteFichero(file_dest_path)){
+							// el fichero destino existe
+							Root_File_Ent *nodo_fichero;
+
+							nodo_fichero=lista_sistema_sacar_fichero(lista_sistema,file_vpath);
+							if(nodo_fichero!=NULL){
+								if(strcmp(nodo_fichero->propietario,pkg_nombre)){
+									char path_respaldo[1024];
+									// el fichero es de un paquete diferente
+									//printf("Colision\n");
+									strcpy(path_respaldo,PKG_BASEDIR);
+									strcat(path_respaldo,nodo_fichero->propietario);
+									strcat(path_respaldo,"/ficheros/");
+									strcat(path_respaldo,file_vpath);
+									rename(file_dest_path,path_respaldo);
+								}
+								free(nodo_fichero);
+							}
+
+							
+						}
+						
+						// es un fichero (o enlace)
+						rename(file_path,file_dest_path);
+
+						// establecer los atributos del fichero origen
+						chmod(file_dest_path,stat_info.st_mode);
+						chown(file_dest_path,stat_info.st_uid,stat_info.st_gid);
+						tiempos.actime=stat_info.st_atime;
+						tiempos.modtime=stat_info.st_mtime;
+						utime(file_dest_path,&tiempos);
+					}
+				}
+			}
+		}while(entidad_dir!=NULL);
+		closedir(directorio);
+	}
+}
+
+
+void pkg_merge(Root_File_List *lista_sistema,char *nombre){
+	char path[1024];
+	char vpath[1024];
+
+	// preparar los path
+	sprintf(path,PKG_BASEDIR"%s/ficheros\0",nombre);
+	strcpy(vpath,"");
+
+	// combinar el directorio con el sistema
+	pkg_merge_dir(lista_sistema,nombre,path,vpath);
+}
+
+
+
+
+
+int main(int argc,char *argv[]){
+	char fichero[1024];
+	char nombre[1024];
+	Pkg_File_List *pkg_lista;
+	Root_File_List *lista;
+
+
+	if(argc>1){
+		// cargar lista de ficheros del sistema
+		lista=lista_sistema_cargar();
+
+
+		strcpy(fichero,argv[1]);
+		// determinar el nombre del paquete
+		basename(fichero,nombre);
+		// preparar para la extraccion del fichero
+		pkg_preparar(nombre);
+		// extraer el fichero
+		printf("*** Extrayendo: \"%s\"\n",nombre);
+		pkg_extraer(fichero,nombre);
+		// comb¡vinar en el sistema
+		printf("*** Combinando \"%s\"\n",nombre);
+		pkg_merge(lista,nombre);
+		// cargar y combinarla con la del sistema
+		pkg_lista=pkg_lista_cargar(nombre);
+		combinar_listas(lista,pkg_lista,nombre);
+		// guardar nueva lista
+		lista_sistema_guardar(lista);
+
+		// liberar listas
+		pkg_lista_borrar(pkg_lista);
+		lista_sistema_borrar(lista);
+
+	}
+}

@@ -1,0 +1,10 @@
+drwxr-xr-x root/root         0 2005-04-12 19:43:24 etc/
+drwxr-xr-x root/root         0 2005-04-12 19:43:29 etc/hotplug.d/
+drwxr-xr-x root/root         0 2005-04-12 19:43:45 etc/hotplug.d/default/
+-rwxr-xr-x root/root       249 2005-04-12 19:43:45 etc/hotplug.d/default/90-detect-block.hotplug
+drwxr-xr-x root/root         0 2005-04-12 19:43:57 usr/
+drwxr-xr-x root/root         0 2005-04-12 20:27:42 usr/sbin/
+-rwxr-xr-x root/root      1228 2005-04-12 19:44:47 usr/sbin/update-detected-block.sh
+-rwxr-xr-x root/root      3886 2005-04-12 20:27:38 usr/sbin/block-info.sh
+-rwxr-xr-x root/root      3687 2005-04-12 20:27:02 usr/sbin/detect-block.sh
+-rwxr-xr-x root/root      1685 2005-04-12 19:44:14 usr/sbin/convina-fstab.sh
